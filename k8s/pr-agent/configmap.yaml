@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pr-agent-config
+  namespace: pr-agent
+data:
+  CONFIG__LOG_LEVEL: "INFO"
+  CONFIG__MODEL: "gpt-5.5"
+  CONFIG__FALLBACK_MODELS: "[]"
+  CONFIG__USE_REPO_SETTINGS_FILE: "false"
+
+  CODEX__USE_CLI: "true"
+  CODEX__CLI_PATH: "codex"
+  CODEX__CLI_MODEL: "gpt-5.5"
+  CODEX__CLI_REASONING_EFFORT: "medium"
+  CODEX__CLI_TIMEOUT: "900"
+
+  GITHUB__DEPLOYMENT_TYPE: "app"
+  GITHUB_APP__HANDLE_PR_ACTIONS: '["opened", "reopened", "ready_for_review"]'
+  GITHUB_APP__HANDLE_PUSH_TRIGGER: "false"
+  GITHUB_APP__PR_COMMANDS: '["/describe --pr_description.output_format=triage --pr_description.final_update_message=false --pr_description.enable_pr_diagram=false --pr_description.enable_semantic_files_types=false"]'
+
+  PR_DESCRIPTION__OUTPUT_FORMAT: "triage"
+  PR_DESCRIPTION__FINAL_UPDATE_MESSAGE: "false"
+  PR_DESCRIPTION__ENABLE_PR_DIAGRAM: "false"
+  PR_DESCRIPTION__ENABLE_SEMANTIC_FILES_TYPES: "false"

@@ -79,6 +79,7 @@ class PRDescription:
             "include_file_summary_changes": len(self.git_provider.get_diff_files()) <= self.COLLAPSIBLE_FILE_LIST_THRESHOLD,
             "duplicate_prompt_examples": get_settings().config.get("duplicate_prompt_examples", False),
             "enable_pr_diagram": enable_pr_diagram,
+            "output_format": get_settings().pr_description.get("output_format", "default"),
         }
 
         self.user_description = self.git_provider.get_user_description()
@@ -467,6 +468,12 @@ class PRDescription:
             self.data['labels'] = self.data.pop('labels')
         if 'description' in self.data:
             self.data['description'] = self.data.pop('description')
+        if 'pushed_content' in self.data:
+            self.data['pushed_content'] = self.data.pop('pushed_content')
+        if 'potential_issues' in self.data:
+            self.data['potential_issues'] = self.data.pop('potential_issues')
+        if 'optimization_suggestions' in self.data:
+            self.data['optimization_suggestions'] = self.data.pop('optimization_suggestions')
         if 'changes_diagram' in self.data:
             sanitized = sanitize_diagram(self.data.pop('changes_diagram'))
             if sanitized:
@@ -560,6 +567,8 @@ class PRDescription:
         - title: a string containing the PR title.
         - pr_body: a string containing the PR description body in a markdown format.
         """
+        if get_settings().pr_description.get("output_format", "default") == "triage":
+            return self._prepare_triage_pr_answer()
 
         # Iterate over the dictionary items and append the key and value to 'markdown_text' in a markdown format
         # Don't display 'PR Labels'
@@ -627,6 +636,70 @@ class PRDescription:
                 pr_body += "\n\n___\n\n"
 
         return title, pr_body, changes_walkthrough, pr_file_changes,
+
+    def _prepare_triage_pr_answer(self) -> Tuple[str, str, str, List[dict]]:
+        ai_title = self.data.pop('title', self.vars["title"])
+        if not get_settings().pr_description.generate_ai_title:
+            title = self.vars["title"]
+        else:
+            title = ai_title
+
+        pushed_content = (
+            self.data.get("pushed_content")
+            or self.data.get("description")
+            or "No pushed content found."
+        )
+        pr_body = "## Pushed Content\n\n"
+        pr_body += f"{self._format_triage_text(pushed_content)}\n\n"
+        pr_body += "## Potential Issues\n\n"
+        pr_body += self._format_file_findings(self.data.get("potential_issues"), "No potential issues found.")
+        pr_body += "\n\n## Optimization Suggestions\n\n"
+        pr_body += self._format_file_findings(
+            self.data.get("optimization_suggestions"),
+            "No optimization suggestions found.",
+        )
+        pr_body += "\n"
+        return title, pr_body, "", []
+
+    @staticmethod
+    def _format_triage_text(value) -> str:
+        if isinstance(value, list):
+            return "\n".join(
+                f"- {str(item).strip().lstrip('-').strip()}" for item in value if str(item).strip()
+            )
+        return str(value).strip()
+
+    def _format_file_findings(self, findings, empty_text: str) -> str:
+        if not findings:
+            return empty_text
+        if isinstance(findings, str):
+            return findings.strip() or empty_text
+        if not isinstance(findings, list):
+            return empty_text
+
+        grouped_findings = {}
+        for finding in findings:
+            if isinstance(finding, dict):
+                filename = str(finding.get("filename") or finding.get("file") or "General").strip()
+                description = str(
+                    finding.get("description") or finding.get("issue") or finding.get("suggestion") or ""
+                ).strip()
+            else:
+                filename = "General"
+                description = str(finding).strip()
+            if not description:
+                continue
+            grouped_findings.setdefault(filename or "General", []).append(description)
+
+        if not grouped_findings:
+            return empty_text
+
+        sections = []
+        for filename, descriptions in grouped_findings.items():
+            section = f"### `{filename}`\n\n"
+            section += "\n".join(f"{idx}. {description}" for idx, description in enumerate(descriptions, start=1))
+            sections.append(section)
+        return "\n\n".join(sections)
 
     def _prepare_file_labels(self):
         file_label_dict = {}

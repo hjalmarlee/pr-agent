@@ -1,0 +1,27 @@
+FROM node:20-bookworm-slim AS codex_cli
+
+RUN npm install -g @openai/codex@0.133.0
+
+FROM python:3.12.13-slim
+
+RUN apt update \
+    && apt install --no-install-recommends -y ca-certificates curl git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=codex_cli /usr/local/bin/node /usr/local/bin/node
+COPY --from=codex_cli /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=codex_cli /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=codex_cli /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex
+
+WORKDIR /app
+ADD pyproject.toml .
+ADD requirements.txt .
+ADD docs docs
+RUN pip install --no-cache-dir . && rm pyproject.toml requirements.txt
+
+ADD pr_agent pr_agent
+ENV PYTHONPATH=/app
+
+CMD ["python", "-m", "uvicorn", "pr_agent.servers.github_app:app", "--host", "0.0.0.0", "--port", "3000"]

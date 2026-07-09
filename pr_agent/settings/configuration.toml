@@ -118,6 +118,8 @@ enable_pr_type=true
 final_update_message = true
 enable_help_text=false
 enable_help_comment=false
+# "default" or "triage"; triage renders Pushed Content, Potential Issues, and Optimization Suggestions.
+output_format="default"
 enable_pr_diagram=true # adds a section with a diagram of the PR changes
 # describe as comment
 publish_description_as_comment=false
@@ -349,6 +351,11 @@ service_callback = []
 auth_json_path = ""
 auth_json = ""
 api_base = "" # optional; token-based auth.json defaults to https://chatgpt.com/backend-api/codex
+use_cli = false # when true, use the local Codex CLI as the AI handler instead of LiteLLM.
+cli_path = "codex"
+cli_model = "gpt-5.5"
+cli_reasoning_effort = "" # optional; when empty, Codex CLI uses its own configured reasoning effort.
+cli_timeout = 300
 
 [pr_similar_issue]
 skip_comments = false

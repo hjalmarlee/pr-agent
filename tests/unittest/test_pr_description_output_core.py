@@ -21,8 +21,10 @@ Coverage:
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from jinja2 import Environment, StrictUndefined
 import yaml
 
+from pr_agent.config_loader import get_settings
 from pr_agent.algo.types import FilePatchInfo
 from pr_agent.algo.utils import PRDescriptionHeader, process_description
 from pr_agent.tools.pr_description import PRDescription
@@ -55,6 +57,7 @@ def _settings(
     enable_semantic_files_types: bool = True,
     collapsible_file_list: str = "adaptive",
     file_table_collapsible_open_by_default: bool = False,
+    output_format: str = "default",
 ) -> MagicMock:
     """Build a settings mock with all PR-description knobs the SUT reads."""
     settings = MagicMock()
@@ -68,6 +71,7 @@ def _settings(
     pd.collapsible_file_list = collapsible_file_list
     pd.get.side_effect = lambda key, default=None: {
         "file_table_collapsible_open_by_default": file_table_collapsible_open_by_default,
+        "output_format": output_format,
     }.get(key, default)
     return settings
 
@@ -332,6 +336,44 @@ class TestPrepareAnswer:
 
         assert title == "Original title"
 
+    @patch("pr_agent.tools.pr_description.get_settings")
+    def test_triage_output_format_groups_findings_by_file(self, mock_get_settings):
+        mock_get_settings.return_value = _settings(output_format="triage")
+        obj = self._obj({
+            "title": "AI title",
+            "type": "Documentation",
+            "description": "- Add event probe markdown",
+            "changes_diagram": "```mermaid\nflowchart LR\nA --> B\n```",
+            "potential_issues": [
+                {"filename": "test-case.md", "description": "Probe text is not referenced by tests."},
+                {"filename": "test-case.md", "description": "Purpose may be unclear later."},
+                {"filename": "docs/readme.md", "description": "README does not mention the probe."},
+            ],
+            "optimization_suggestions": [
+                {"filename": "test-case.md", "description": "Link this probe to webhook verification notes."},
+            ],
+            "pr_files": [
+                {"filename": "test-case.md", "changes_title": "Add probe", "label": "documentation"},
+            ],
+        })
+
+        _, body, changes_walkthrough, pr_file_changes = obj._prepare_pr_answer()
+
+        assert body.startswith("## Pushed Content\n\n- Add event probe markdown")
+        assert "## Potential Issues" in body
+        assert "### `test-case.md`" in body
+        assert "1. Probe text is not referenced by tests." in body
+        assert "2. Purpose may be unclear later." in body
+        assert "### `docs/readme.md`" in body
+        assert "1. README does not mention the probe." in body
+        assert "## Optimization Suggestions" in body
+        assert "1. Link this probe to webhook verification notes." in body
+        assert "PR Type" not in body
+        assert "Diagram Walkthrough" not in body
+        assert "File Walkthrough" not in body
+        assert changes_walkthrough == ""
+        assert pr_file_changes == []
+
 
 # ---------------------------------------------------------------------------
 # process_pr_files_prediction (gfm vs non-gfm)
@@ -428,6 +470,32 @@ class TestRoundTripWithProcessDescription:
 
     def test_process_description_returns_empty_on_empty_input(self):
         assert process_description("") == ("", [])
+
+
+class TestDescriptionPromptRendering:
+    def test_triage_prompt_renders_required_fields(self):
+        settings = get_settings()
+        variables = {
+            "skills_context": "",
+            "extra_instructions": "",
+            "repo_context": "",
+            "enable_custom_labels": False,
+            "custom_labels_class": "",
+            "enable_semantic_files_types": False,
+            "include_file_summary_changes": False,
+            "enable_pr_diagram": False,
+            "output_format": "triage",
+        }
+
+        rendered = Environment(undefined=StrictUndefined).from_string(
+            settings.pr_description_prompt.system
+        ).render(variables)
+
+        assert "pushed_content" in rendered
+        assert "potential_issues" in rendered
+        assert "optimization_suggestions" in rendered
+        assert "changes_diagram" not in rendered
+        assert "pr_files" not in rendered
 
     def test_process_description_without_walkthrough_returns_full_text(self):
         text = "Just a description without any walkthrough section."

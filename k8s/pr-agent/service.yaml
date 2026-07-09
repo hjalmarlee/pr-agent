@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pr-agent
+  namespace: pr-agent
+  labels:
+    app.kubernetes.io/name: pr-agent
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: pr-agent
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

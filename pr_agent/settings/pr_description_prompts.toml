@@ -4,6 +4,9 @@ Your task is to provide a full description for the PR content: type, description
 - Focus on the new PR code (lines starting with '+' in the 'PR Git Diff' section).
 - Keep in mind that the 'Previous title', 'Previous description' and 'Commit messages' sections may be partial, simplistic, non-informative or out of date. Hence, compare them to the PR diff code, and use them only as a reference.
 - The generated title and description should prioritize the most significant changes.
+- When output_format is 'triage', write the response in English and focus on pushed content,
+  potential issues, and optimization suggestions. Each potential issue and optimization
+  suggestion must name the relevant file.
 - If needed, each YAML output should be in block scalar indicator ('|')
 - When quoting variables, names or file paths from the code, use backticks (`) instead of single quote (').
 - When needed, use '- ' as bullets
@@ -58,7 +61,28 @@ class FileDescription(BaseModel):
     label: str = Field(description="a single semantic label that represents a type of code changes that occurred in the File. Possible values (partial list): 'bug fix', 'tests', 'enhancement', 'documentation', 'error handling', 'configuration changes', 'dependencies', 'formatting', 'miscellaneous', ...")
 {%- endif %}
 
+{%- if output_format == "triage" %}
+class FileFinding(BaseModel):
+    filename: str = Field(
+        description="the full file path related to the finding, or 'General' when no single file applies"
+    )
+    description: str = Field(description="one concise English sentence describing the issue or suggestion")
+
+{%- endif %}
+
 class PRDescription(BaseModel):
+{%- if output_format == "triage" %}
+    title: str = Field(description="a concise and descriptive title that captures the PR's main theme")
+    pushed_content: str = Field(description="summarize what was pushed in 1-4 concise English bullet points")
+    potential_issues: List[FileFinding] = Field(
+        max_items=6,
+        description="potential risks, bugs, missing tests, unclear behavior, or edge cases introduced by this PR. Use an empty list if none are found.",
+    )
+    optimization_suggestions: List[FileFinding] = Field(
+        max_items=6,
+        description="concrete optimization or cleanup suggestions for this PR. Use an empty list if none are found.",
+    )
+{%- else %}
     type: List[PRType] = Field(description="one or more types that describe the PR content. Return the label member value (e.g. 'Bug fix', not 'bug_fix')")
     description: str = Field(description="summarize the PR changes with 1-4 bullet points, each up to 8 words. For large PRs, add sub-bullets for each bullet if needed. Order bullets by importance, with each bullet highlighting a key change group.")
     title: str = Field(description="a concise and descriptive title that captures the PR's main theme")
@@ -68,12 +92,30 @@ class PRDescription(BaseModel):
 {%- if enable_semantic_files_types %}
     pr_files: List[FileDescription] = Field(max_items=20, description="a list of all the files that were changed in the PR, and summary of their changes. Each file must be analyzed regardless of change size.")
 {%- endif %}
+{%- endif %}
 =====
 
 
 Example output:
 
 ```yaml
+{%- if output_format == "triage" %}
+title: |
+  ...
+pushed_content: |
+  - ...
+  - ...
+potential_issues:
+- filename: |
+    path/to/file.ext
+  description: |
+    ...
+optimization_suggestions:
+- filename: |
+    path/to/file.ext
+  description: |
+    ...
+{%- else %}
 type:
 - ...
 - ...
@@ -102,6 +144,7 @@ pr_files:
   label: |
     label_key_1
 ...
+{%- endif %}
 {%- endif %}
 ```
 
@@ -162,6 +205,23 @@ Note that lines in the diff body are prefixed with a symbol that represents the 
 
 Example output:
 ```yaml
+{%- if output_format == "triage" %}
+title: |
+  ...
+pushed_content: |
+  - ...
+  - ...
+potential_issues:
+- filename: |
+    path/to/file.ext
+  description: |
+    ...
+optimization_suggestions:
+- filename: |
+    path/to/file.ext
+  description: |
+    ...
+{%- else %}
 type:
 - Bug fix
 - Refactoring
@@ -191,6 +251,7 @@ pr_files:
   label: |
     label_key_1
 ...
+{%- endif %}
 {%- endif %}
 ```
 (replace '...' with the actual values)
